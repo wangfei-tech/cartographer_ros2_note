@@ -154,8 +154,10 @@ transform::Rigid3d PoseExtrapolator::ExtrapolatePose(const common::Time time) {
   const TimedPose& newest_timed_pose = timed_pose_queue_.back();
   CHECK_GE(time, newest_timed_pose.time);
   if (cached_extrapolated_pose_.time != time) {
+    // 预测 tracking frame 在local坐标系下time时刻的位置
     const Eigen::Vector3d translation =
         ExtrapolateTranslation(time) + newest_timed_pose.pose.translation();
+    // 预测 tracking frame 在local坐标系下time时刻的姿态
     const Eigen::Quaterniond rotation =
         newest_timed_pose.pose.rotation() *
         ExtrapolateRotation(time, extrapolation_imu_tracker_.get());
@@ -260,7 +262,7 @@ void PoseExtrapolator::AdvanceImuTracker(const common::Time time,
   }
   imu_tracker->Advance(time);
 }
-
+// 旋转量的预测
 Eigen::Quaterniond PoseExtrapolator::ExtrapolateRotation(
     const common::Time time, ImuTracker* const imu_tracker) const {
   CHECK_GE(time, imu_tracker->time());
@@ -268,17 +270,19 @@ Eigen::Quaterniond PoseExtrapolator::ExtrapolateRotation(
   const Eigen::Quaterniond last_orientation = imu_tracker_->orientation();
   return last_orientation.inverse() * imu_tracker->orientation();
 }
-
+// 返回从最后一个位姿的时间 到time 时刻 的tracking frame 在local坐标系下的平移量
 Eigen::Vector3d PoseExtrapolator::ExtrapolateTranslation(common::Time time) {
   const TimedPose& newest_timed_pose = timed_pose_queue_.back();
   const double extrapolation_delta =
       common::ToSeconds(time - newest_timed_pose.time);
+// 不使用里程计 使用在local 坐标系下的线速度 乘以时间得到平移量的预测
   if (odometry_data_.size() < 2) {
     return extrapolation_delta * linear_velocity_from_poses_;
   }
+
   return extrapolation_delta * linear_velocity_from_odometry_;
 }
-
+// 获取一段时间内的位姿预测
 PoseExtrapolator::ExtrapolationResult
 PoseExtrapolator::ExtrapolatePosesWithGravity(
     const std::vector<common::Time>& times) {
