@@ -139,9 +139,13 @@ LocalTrajectoryBuilder2D::AddRangeData(
   std::vector<transform::Rigid3f> range_data_poses;
   range_data_poses.reserve(synchronized_data.ranges.size());
   bool warned = false;
+
+  // 预测得到每一个时间点的位姿
   for (const auto& range : synchronized_data.ranges) {
     common::Time time_point = time + common::FromSeconds(range.point_time.time);
+    // 如果该时间比上次预测位姿的时间还要早，说明这个点的时间戳往回走了，就报错
     if (time_point < extrapolator_->GetLastExtrapolatedTime()) {
+      // 一个循环只报一次错
       if (!warned) {
         LOG(ERROR)
             << "Timestamp of individual range data point jumps backwards from "
@@ -150,6 +154,7 @@ LocalTrajectoryBuilder2D::AddRangeData(
       }
       time_point = extrapolator_->GetLastExtrapolatedTime();
     }
+    // step 2: 预测出每个点的时间戳时刻，tracking frame 在local slam 坐标系下的位姿
     range_data_poses.push_back(
         extrapolator_->ExtrapolatePose(time_point).cast<float>());
   }
@@ -319,8 +324,10 @@ void LocalTrajectoryBuilder2D::InitializeExtrapolator(const common::Time time) {
   if (extrapolator_ != nullptr) {
     return;
   }
+  // 注意use_imu_based为true就会报错
   CHECK(!options_.pose_extrapolator_options().use_imu_based());
   // TODO(gaschler): Consider using InitializeWithImu as 3D does.
+  // 初始化位姿推测器
   extrapolator_ = absl::make_unique<PoseExtrapolator>(
       ::cartographer::common::FromSeconds(options_.pose_extrapolator_options()
                                               .constant_velocity()
@@ -328,6 +335,7 @@ void LocalTrajectoryBuilder2D::InitializeExtrapolator(const common::Time time) {
       options_.pose_extrapolator_options()
           .constant_velocity()
           .imu_gravity_time_constant());
+  // 添加初始位姿
   extrapolator_->AddPose(time, transform::Rigid3d::Identity());
 }
 
