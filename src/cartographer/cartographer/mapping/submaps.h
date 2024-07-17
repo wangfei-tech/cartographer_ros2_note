@@ -56,8 +56,13 @@ inline uint8 ProbabilityToLogOddsInteger(const float probability) {
 // track of how many range data were inserted into it, and sets
 // 'insertion_finished' when the map no longer changes and is ready for loop
 // closing.
+
+/***一个单独的子地图，在本地地图框架中有一个“local_pose”，保持跟踪插入到其中的范围数据的
+ * 数量，并在地图不再变化并准备好循环关闭时设置*/
+
 class Submap {
  public:
+ //local_submap_pose 作为子图的坐标原点
   Submap(const transform::Rigid3d& local_submap_pose)
       : local_pose_(local_submap_pose) {}
   virtual ~Submap() {}
@@ -85,7 +90,7 @@ class Submap {
   }
 
  private:
-  const transform::Rigid3d local_pose_;
+  const transform::Rigid3d local_pose_; //子图原点在local坐标系下的坐标
   int num_range_data_ = 0;
   bool insertion_finished_ = false;
 };

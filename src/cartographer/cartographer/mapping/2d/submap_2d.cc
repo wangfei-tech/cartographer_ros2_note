@@ -75,6 +75,7 @@ Submap2D::Submap2D(const Eigen::Vector2f& origin, std::unique_ptr<Grid2D> grid,
   grid_ = std::move(grid);
 }
 
+// 根据proto::Submap格式的数据生成Submap2D
 Submap2D::Submap2D(const proto::Submap2D& proto,
                    ValueConversionTables* conversion_tables)
     : Submap(transform::ToRigid3(proto.local_pose())),
@@ -124,13 +125,16 @@ void Submap2D::UpdateFromProto(const proto::Submap& proto) {
   }
 }
 
+// 将地图进行压缩 放入到response  输出response压缩后的地图数据
 void Submap2D::ToResponseProto(
     const transform::Rigid3d&,
     proto::SubmapQuery::Response* const response) const {
   if (!grid_) return;
   response->set_submap_version(num_range_data());
+  // note: const在*后面，指针指向的地址不能变，而内存单元中的内容可以变
   proto::SubmapQuery::Response::SubmapTexture* const texture =
       response->add_textures();
+  // 填充压缩后的数据
   grid()->DrawToSubmapTexture(texture, local_pose());
 }
 
@@ -139,7 +143,9 @@ void Submap2D::InsertRangeData(
     const RangeDataInserterInterface* range_data_inserter) {
   CHECK(grid_);
   CHECK(!insertion_finished());
+  // 将雷达数据写入到栅格地图中
   range_data_inserter->Insert(range_data, grid_.get());
+  // 插入到地图中的雷达数据的个数加1
   set_num_range_data(num_range_data() + 1);
 }
 
@@ -150,9 +156,11 @@ void Submap2D::Finish() {
   set_insertion_finished(true);
 }
 
+//ActiveSubmaps2D的构造函数
 ActiveSubmaps2D::ActiveSubmaps2D(const proto::SubmapsOptions2D& options)
     : options_(options), range_data_inserter_(CreateRangeDataInserter()) {}
 
+// 返回指向submap2D 的 share_ptr 指针的vector
 std::vector<std::shared_ptr<const Submap2D>> ActiveSubmaps2D::submaps() const {
   return std::vector<std::shared_ptr<const Submap2D>>(submaps_.begin(),
                                                       submaps_.end());
@@ -160,13 +168,17 @@ std::vector<std::shared_ptr<const Submap2D>> ActiveSubmaps2D::submaps() const {
 
 std::vector<std::shared_ptr<const Submap2D>> ActiveSubmaps2D::InsertRangeData(
     const sensor::RangeData& range_data) {
+  // 如果第二个子图插入节点的数据等于num_range_data时，就新建一个子图
+  // 因为这时第一个子图应该已经处于完成状态了
   if (submaps_.empty() ||
       submaps_.back()->num_range_data() == options_.num_range_data()) {
-    AddSubmap(range_data.origin.head<2>());
+    AddSubmap(range_data.origin.head<2>()); // 传入 x ,y 
   }
+  // 第一帧雷达数据同时写入两个子图中
   for (auto& submap : submaps_) {
     submap->InsertRangeData(range_data, range_data_inserter_.get());
   }
+  //
   if (submaps_.front()->num_range_data() == 2 * options_.num_range_data()) {
     submaps_.front()->Finish();
   }
@@ -176,10 +188,12 @@ std::vector<std::shared_ptr<const Submap2D>> ActiveSubmaps2D::InsertRangeData(
 std::unique_ptr<RangeDataInserterInterface>
 ActiveSubmaps2D::CreateRangeDataInserter() {
   switch (options_.range_data_inserter_options().range_data_inserter_type()) {
+    // 概率栅格地图的写入器
     case proto::RangeDataInserterOptions::PROBABILITY_GRID_INSERTER_2D:
       return absl::make_unique<ProbabilityGridRangeDataInserter2D>(
           options_.range_data_inserter_options()
               .probability_grid_range_data_inserter_options_2d());
+    //tsdf地图写入器
     case proto::RangeDataInserterOptions::TSDF_INSERTER_2D:
       return absl::make_unique<TSDFRangeDataInserter2D>(
           options_.range_data_inserter_options()
@@ -194,9 +208,11 @@ std::unique_ptr<GridInterface> ActiveSubmaps2D::CreateGrid(
   constexpr int kInitialSubmapSize = 100;
   float resolution = options_.grid_options_2d().resolution();
   switch (options_.grid_options_2d().grid_type()) {
+    //概率栅格地图
     case proto::GridOptions2D::PROBABILITY_GRID:
       return absl::make_unique<ProbabilityGrid>(
           MapLimits(resolution,
+                    // 左上角坐标为坐标系的最大值，origin位于地图的中间
                     origin.cast<double>() + 0.5 * kInitialSubmapSize *
                                                 resolution *
                                                 Eigen::Vector2d::Ones(),
@@ -221,13 +237,16 @@ std::unique_ptr<GridInterface> ActiveSubmaps2D::CreateGrid(
   }
 }
 
+//新增一个子图，根据子图个数判断是否删除第一个子图
 void ActiveSubmaps2D::AddSubmap(const Eigen::Vector2f& origin) {
+  // 调用AddSubmap时第一个子图一定是完成状态，所以子图数为2时，就可以删掉第一个子图
   if (submaps_.size() >= 2) {
     // This will crop the finished Submap before inserting a new Submap to
     // reduce peak memory usage a bit.
     CHECK(submaps_.front()->insertion_finished());
     submaps_.erase(submaps_.begin());
   }
+  //新建一个子图，并保存指向新子图的智能指针
   submaps_.push_back(absl::make_unique<Submap2D>(
       origin,
       std::unique_ptr<Grid2D>(
