@@ -96,10 +96,12 @@ Grid2D::Grid2D(const proto::Grid2D& proto,
 }
 
 // Finishes the update sequence.
+// 插入雷达数据结束
 void Grid2D::FinishUpdate() {
   while (!update_indices_.empty()) {
     DCHECK_GE(correspondence_cost_cells_[update_indices_.back()],
               kUpdateMarker);
+    // 更新的时候加上了kUpdataMarker,在这里减去
     correspondence_cost_cells_[update_indices_.back()] -= kUpdateMarker;
     update_indices_.pop_back();
   }
@@ -122,11 +124,12 @@ void Grid2D::ComputeCroppedLimits(Eigen::Array2i* const offset,
 // Grows the map as necessary to include 'point'. This changes the meaning of
 // these coordinates going forward. This method must be called immediately
 // after 'FinishUpdate', before any calls to 'ApplyLookupTable'.
+// 根据坐标决定是否对地图进行扩大
 void Grid2D::GrowLimits(const Eigen::Vector2f& point) {
   GrowLimits(point, {mutable_correspondence_cost_cells()},
              {kUnknownCorrespondenceValue});
 }
-
+// 根据坐标决定是否对地图进行扩大
 void Grid2D::GrowLimits(const Eigen::Vector2f& point,
                         const std::vector<std::vector<uint16>*>& grids,
                         const std::vector<uint16>& grids_unknown_cell_values) {

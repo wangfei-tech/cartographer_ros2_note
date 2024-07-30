@@ -70,6 +70,7 @@ std::unique_ptr<std::vector<float>> PrecomputeValueToCorrespondenceCost() {
 const std::vector<float>* const kValueToProbability =
     PrecomputeValueToProbability().release();
 
+// 从[0,1-32767]映射成[0.1~0.9]转换表
 const std::vector<float>* const kValueToCorrespondenceCost =
     PrecomputeValueToCorrespondenceCost().release();
 
@@ -85,14 +86,18 @@ std::vector<uint16> ComputeLookupTableToApplyOdds(const float odds) {
   }
   return result;
 }
-
+// 将栅格是未知状态与odds状态下，将更新时的所有可能得结果预先计算出来
 std::vector<uint16> ComputeLookupTableToApplyCorrespondenceCostOdds(
     float odds) {
   std::vector<uint16> result;
-  result.reserve(kValueCount);
+  result.reserve(kValueCount); //32768
+
+  //当前cell是unkown情况下，直接把odds转成value存进来
+  // odds表示每个栅格被占用的可能性
   result.push_back(CorrespondenceCostToValue(ProbabilityToCorrespondenceCost(
                        ProbabilityFromOdds(odds))) +
-                   kUpdateMarker);
+                   kUpdateMarker);//加上一个kUpdateMarker表示栅格被更新过
+  //计算更新的时候，从1 到32768的所有可能得更新后的结果
   for (int cell = 1; cell != kValueCount; ++cell) {
     result.push_back(
         CorrespondenceCostToValue(

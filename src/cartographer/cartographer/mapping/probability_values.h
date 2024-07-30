@@ -48,7 +48,7 @@ inline uint16 BoundedFloatToValue(const float float_value,
 inline float Odds(float probability) {
   return probability / (1.f - probability);
 }
-
+//从odds到概率值
 inline float ProbabilityFromOdds(const float odds) {
   return odds / (odds + 1.f);
 }
@@ -82,12 +82,14 @@ constexpr uint16 kUnknownCorrespondenceValue = kUnknownProbabilityValue;
 constexpr uint16 kUpdateMarker = 1u << 15;
 
 // Converts a correspondence_cost to a uint16 in the [1, 32767] range.
+// 将浮点数correspondence_cost转换成[1-32768]范围内的uint16的整数
 inline uint16 CorrespondenceCostToValue(const float correspondence_cost) {
   return BoundedFloatToValue(correspondence_cost, kMinCorrespondenceCost,
                              kMaxCorrespondenceCost);
 }
 
 // Converts a probability to a uint16 in the [1, 32767] range.
+// 将浮点数probability转换成[1-32768]范围内的uint16的整数
 inline uint16 ProbabilityToValue(const float probability) {
   return BoundedFloatToValue(probability, kMinProbability, kMaxProbability);
 }

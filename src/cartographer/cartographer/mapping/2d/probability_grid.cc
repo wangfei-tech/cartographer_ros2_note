@@ -55,15 +55,20 @@ void ProbabilityGrid::SetProbability(const Eigen::Array2i& cell_index,
 //
 // If this is the first call to ApplyOdds() for the specified cell, its value
 // will be set to probability corresponding to 'odds'.
+// 使用查找表对指定的栅格进行栅格值的更新
 bool ProbabilityGrid::ApplyLookupTable(const Eigen::Array2i& cell_index,
                                        const std::vector<uint16>& table) {
   DCHECK_EQ(table.size(), kUpdateMarker);
   const int flat_index = ToFlatIndex(cell_index);
+  // 获取对应栅格值的指针
   uint16* cell = &(*mutable_correspondence_cost_cells())[flat_index];
+  // 对处于更新状态的栅格，不再进行更新
   if (*cell >= kUpdateMarker) {
     return false;
   }
+  // 标记这个索引的栅格已经被更新过
   mutable_update_indices()->push_back(flat_index);
+  // 更新栅格值
   *cell = table[*cell];
   DCHECK_GE(*cell, kUpdateMarker);
   mutable_known_cells_box()->extend(cell_index.matrix());

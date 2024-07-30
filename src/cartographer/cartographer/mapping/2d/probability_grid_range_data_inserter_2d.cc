@@ -32,8 +32,12 @@ namespace {
 // Factor for subpixel accuracy of start and end point for ray casts.
 constexpr int kSubpixelScale = 1000;
 
+//根据点云的bounding box 看是否需要对地图进行扩张
 void GrowAsNeeded(const sensor::RangeData& range_data,
                   ProbabilityGrid* const probability_grid) {
+  //找到点云的boundingbox
+  // NOte: AlignedBox2f 是 Eigen 库中一个用于表示二维对齐边界框（axis-aligned bounding box）的类。
+  // 这个类特别适用于在计算几何中表示和操作二维矩形区域。
   Eigen::AlignedBox2f bounding_box(range_data.origin.head<2>());
   // Padding around bounding box to avoid numerical issues at cell boundaries.
   constexpr float kPadding = 1e-6f;
@@ -48,11 +52,15 @@ void GrowAsNeeded(const sensor::RangeData& range_data,
   probability_grid->GrowLimits(bounding_box.max() +
                                kPadding * Eigen::Vector2f::Ones());
 }
-
+/**
+ * 根据雷达点对栅格地图进行更新
+ * 
+*/
 void CastRays(const sensor::RangeData& range_data,
               const std::vector<uint16>& hit_table,
               const std::vector<uint16>& miss_table,
               const bool insert_free_space, ProbabilityGrid* probability_grid) {
+  //根据雷达数据调整地图的范围
   GrowAsNeeded(range_data, probability_grid);
 
   const MapLimits& limits = probability_grid->limits();
@@ -61,16 +69,19 @@ void CastRays(const sensor::RangeData& range_data,
       superscaled_resolution, limits.max(),
       CellLimits(limits.cell_limits().num_x_cells * kSubpixelScale,
                  limits.cell_limits().num_y_cells * kSubpixelScale));
+  // 雷达原点在地图中的像素坐标，作为画线的起始坐标。
   const Eigen::Array2i begin =
       superscaled_limits.GetCellIndex(range_data.origin.head<2>());
   // Compute and add the end points.
   std::vector<Eigen::Array2i> ends;
   ends.reserve(range_data.returns.size());
   for (const sensor::RangefinderPoint& hit : range_data.returns) {
+    // 计算hit点在地图中的像素坐标，作为划线的终止点
     ends.push_back(superscaled_limits.GetCellIndex(hit.position.head<2>()));
+    // 更新hit点的栅格值
     probability_grid->ApplyLookupTable(ends.back() / kSubpixelScale, hit_table);
   }
-
+  // 如果不插入free空间则直接return 结束
   if (!insert_free_space) {
     return;
   }
@@ -78,8 +89,9 @@ void CastRays(const sensor::RangeData& range_data,
   // Now add the misses.
   for (const Eigen::Array2i& end : ends) {
     std::vector<Eigen::Array2i> ray =
-        RayToPixelMask(begin, end, kSubpixelScale);
+        RayToPixelMask(begin, end, kSubpixelScale);//获取栅格坐标
     for (const Eigen::Array2i& cell_index : ray) {
+      // 从起点到end点之前，更新miss点的栅格值
       probability_grid->ApplyLookupTable(cell_index, miss_table);
     }
   }
@@ -116,10 +128,12 @@ CreateProbabilityGridRangeDataInserterOptions2D(
 ProbabilityGridRangeDataInserter2D::ProbabilityGridRangeDataInserter2D(
     const proto::ProbabilityGridRangeDataInserterOptions2D& options)
     : options_(options),
+    //生成更新占用栅格时的查找表
       hit_table_(ComputeLookupTableToApplyCorrespondenceCostOdds(
-          Odds(options.hit_probability()))),
+          Odds(options.hit_probability()))),//0.55
+    //生成更新空闲栅格时的查找表
       miss_table_(ComputeLookupTableToApplyCorrespondenceCostOdds(
-          Odds(options.miss_probability()))) {}
+          Odds(options.miss_probability()))) {} //0.49
 
 void ProbabilityGridRangeDataInserter2D::Insert(
     const sensor::RangeData& range_data, GridInterface* const grid) const {
