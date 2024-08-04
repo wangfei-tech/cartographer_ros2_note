@@ -77,6 +77,7 @@ void PoseExtrapolator::AddPose(const common::Time time,
     if (!imu_data_.empty()) {
       tracker_start = std::min(tracker_start, imu_data_.front().time);
     }
+    //
     imu_tracker_ =
         absl::make_unique<ImuTracker>(gravity_time_constant_, tracker_start);
   }
@@ -87,15 +88,18 @@ void PoseExtrapolator::AddPose(const common::Time time,
     timed_pose_queue_.pop_front();
   }
   //根据加入的pose计算线速度与角速度
+  // // 更新linear_velocity_from_poses_和angular_velocity_from_poses_
   UpdateVelocitiesFromPoses();
-  //将imu_tracker_更新到time时刻
-  AdvanceImuTracker(time, imu_tracker_.get());
-  
-  
+  // 更新imu_tracker_，使用IMU进行旋转推算，如果没有IMU数据，则使用angular_velocity_from_poses_进行旋转推算。推算的时间点为当前位姿的时间点
+  // 该imu_tracker_会一直积分更新，每次都是更新到前端最新解算的时间tim
+  AdvanceImuTracker(time, imu_tracker_.get()); //get() 函数用于从智能指针中获取底层原始指针。
+                                               //它不影响智能指针的所有权或生命周期，只是提供对底层指针的访问。
+  // 删除多余的imu数据
   TrimImuData();
-  
+  // 删除多余的轮速计数据
   TrimOdometryData();
   // 用于根据里程计数据计算线速度时姿态的预测
+ //// 将imu_tracker_传给odometry_imu_tracker_和extrapolation_imu_tracker_
   odometry_imu_tracker_ = absl::make_unique<ImuTracker>(*imu_tracker_);
   // 用于位姿预测时的姿态预测
   extrapolation_imu_tracker_ = absl::make_unique<ImuTracker>(*imu_tracker_);
@@ -107,13 +111,15 @@ void PoseExtrapolator::AddImuData(const sensor::ImuData& imu_data) {
   imu_data_.push_back(imu_data);
   TrimImuData();//imu数据裁剪
 }
-
+//使用轮速计的位姿数据（不用线速度与角速度）
 void PoseExtrapolator::AddOdometryData(
+  //首先要保证轮速计的时间戳不小于前端算出来的时间戳
     const sensor::OdometryData& odometry_data) {
   CHECK(timed_pose_queue_.empty() ||
         odometry_data.time >= timed_pose_queue_.back().time);
+
   odometry_data_.push_back(odometry_data);
-  TrimOdometryData();
+  TrimOdometryData();//裁剪数据
   if (odometry_data_.size() < 2) {
     return;
   }
@@ -175,7 +181,9 @@ Eigen::Quaterniond PoseExtrapolator::EstimateGravityOrientation(
   AdvanceImuTracker(time, &imu_tracker);
   return imu_tracker.orientation();
 }
-
+// 更新linear_velocity_from_poses_和angular_velocity_from_poses_的方法：
+// 线速度 = (最新的平移-上一次的平移)/时间差
+// 角速度 = (最新的角度-上一次的角度)/时间差
 void PoseExtrapolator::UpdateVelocitiesFromPoses() {
   if (timed_pose_queue_.size() < 2) {
     // We need two poses to estimate velocities.
@@ -223,7 +231,7 @@ void PoseExtrapolator::AdvanceImuTracker(const common::Time time,
   CHECK_GE(time, imu_tracker->time());
 
   //不使用imu ，或者预测时间之前没有imu数据
-  // 备注 ：即使没有使用IMU这里页利用了其他的数据观测来进行更新
+  // 备注 ：即使没有使用IMU这里也利用了其他的数据观测来进行更新
   if (imu_data_.empty() || time < imu_data_.front().time) {
     // There is no IMU data until 'time', so we advance the ImuTracker and use
     // the angular velocities from poses and fake gravity to help 2D stability.
