@@ -113,13 +113,21 @@ RealTimeCorrelativeScanMatcher2D::GenerateExhaustiveSearchCandidates(
   CHECK_EQ(candidates.size(), num_candidates);
   return candidates;
 }
-
+/**
+ * 相关性扫描匹配 计算量相对较大
+ * 1. 预测出来的先验位姿
+ * 2. 用于匹配的点云
+ * 3. 用于匹配的栅格
+ * 4. 校正后的位姿
+ * 最终的结果为 匹配的得分
+ * 
+*/
 double RealTimeCorrelativeScanMatcher2D::Match(
     const transform::Rigid2d& initial_pose_estimate,
     const sensor::PointCloud& point_cloud, const Grid2D& grid,
     transform::Rigid2d* pose_estimate) const {
   CHECK(pose_estimate != nullptr);
-
+  // step 1: 将点云旋转到预测的方向上
   const Eigen::Rotation2Dd initial_rotation = initial_pose_estimate.rotation();
   const sensor::PointCloud rotated_point_cloud = sensor::TransformPointCloud(
       point_cloud,

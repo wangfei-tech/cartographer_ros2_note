@@ -73,29 +73,28 @@ std::unique_ptr<transform::Rigid2d> LocalTrajectoryBuilder2D::ScanMatch(
   // The online correlative scan matcher will refine the initial estimate for
   // the Ceres scan matcher.
   transform::Rigid2d initial_ceres_pose = pose_prediction;
-
-  if (options_.use_online_correlative_scan_matching()) {
-    const double score = real_time_correlative_scan_matcher_.Match(
-        pose_prediction, filtered_gravity_aligned_point_cloud,
-        *matching_submap->grid(), &initial_ceres_pose);
+  // 根据参数是否 使用correlative_scan_matching 对先验位姿进行校准  基于暴力匹配的优化
+  if (options_.use_online_correlative_scan_matching()) 
+  {
+    const double score = real_time_correlative_scan_matcher_.Match(pose_prediction, filtered_gravity_aligned_point_cloud,
+                                                                   *matching_submap->grid(),
+                                                                   &initial_ceres_pose);
     kRealTimeCorrelativeScanMatcherScoreMetric->Observe(score);
   }
 
   auto pose_observation = absl::make_unique<transform::Rigid2d>();
   ceres::Solver::Summary summary;
+  //使用ceres进行扫描匹配 基于优化的扫描匹配
   ceres_scan_matcher_.Match(pose_prediction.translation(), initial_ceres_pose,
                             filtered_gravity_aligned_point_cloud,
                             *matching_submap->grid(), pose_observation.get(),
                             &summary);
-  if (pose_observation) {
+  if (pose_observation)
+  {
     kCeresScanMatcherCostMetric->Observe(summary.final_cost);
-    const double residual_distance =
-        (pose_observation->translation() - pose_prediction.translation())
-            .norm();
+    const double residual_distance =(pose_observation->translation() - pose_prediction.translation()).norm();
     kScanMatcherResidualDistanceMetric->Observe(residual_distance);
-    const double residual_angle =
-        std::abs(pose_observation->rotation().angle() -
-                 pose_prediction.rotation().angle());
+    const double residual_angle =std::abs(pose_observation->rotation().angle() - pose_prediction.rotation().angle());
     kScanMatcherResidualAngleMetric->Observe(residual_angle);
   }
   return pose_observation;
