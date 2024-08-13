@@ -127,24 +127,31 @@ double RealTimeCorrelativeScanMatcher2D::Match(
     const sensor::PointCloud& point_cloud, const Grid2D& grid,
     transform::Rigid2d* pose_estimate) const {
   CHECK(pose_estimate != nullptr);
+
   // step 1: 将点云旋转到预测的方向上
   const Eigen::Rotation2Dd initial_rotation = initial_pose_estimate.rotation();
   const sensor::PointCloud rotated_point_cloud = sensor::TransformPointCloud(
       point_cloud,
       transform::Rigid3f::Rotation(Eigen::AngleAxisf(
           initial_rotation.cast<float>().angle(), Eigen::Vector3f::UnitZ())));
+  // 根据配置参数初始化 SearchParameters lua文件中进行配置
   const SearchParameters search_parameters(
       options_.linear_search_window(), options_.angular_search_window(),
       rotated_point_cloud, grid.limits().resolution());
 
+  // step2: 生成按照不同角度旋转后的点云集合
   const std::vector<sensor::PointCloud> rotated_scans =
       GenerateRotatedScans(rotated_point_cloud, search_parameters);
-  const std::vector<DiscreteScan2D> discrete_scans = DiscretizeScans(
-      grid.limits(), rotated_scans,
-      Eigen::Translation2f(initial_pose_estimate.translation().x(),
-                           initial_pose_estimate.translation().y()));
-  std::vector<Candidate2D> candidates =
-      GenerateExhaustiveSearchCandidates(search_parameters);
+
+  // step3: 将旋转后的点云集合按照预测出的平移量进行平移，获取平移后的点在地图中索引
+  const std::vector<DiscreteScan2D> discrete_scans = DiscretizeScans(grid.limits(), rotated_scans,
+                                                                    Eigen::Translation2f(initial_pose_estimate.translation().x(),
+                                                                    initial_pose_estimate.translation().y()));
+
+  // step4： 生成所有的候选解
+  std::vector<Candidate2D> candidates =GenerateExhaustiveSearchCandidates(search_parameters);
+
+  // 计算所有候选解的加权得分
   ScoreCandidates(grid, discrete_scans, search_parameters, &candidates);
 
   const Candidate2D& best_candidate =

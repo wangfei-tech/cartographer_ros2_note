@@ -29,7 +29,7 @@ namespace cartographer {
 namespace mapping {
 namespace scan_matching {
 
-typedef std::vector<Eigen::Array2i> DiscreteScan2D;
+typedef std::vector<Eigen::Array2i> DiscreteScan2D;// 栅格地图的索引
 
 // Describes the search space.
 struct SearchParameters {
@@ -52,10 +52,10 @@ struct SearchParameters {
   void ShrinkToFit(const std::vector<DiscreteScan2D>& scans,
                    const CellLimits& cell_limits);
 
-  int num_angular_perturbations;
-  double angular_perturbation_step_size;
-  double resolution;
-  int num_scans;
+  int num_angular_perturbations; //个数
+  double angular_perturbation_step_size; // 角度分辨率
+  double resolution; //
+  int num_scans; // 旋转后的点云集合的个数
   std::vector<LinearBounds> linear_bounds;  // Per rotated scans.
 };
 

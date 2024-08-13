@@ -201,6 +201,7 @@ LocalTrajectoryBuilder2D::AddRangeData(
         extrapolator_->EstimateGravityOrientation(time));
     // TODO(gaschler): This assumes that 'range_data_poses.back()' is at time
     // 'time'.
+    // 以最后一个点的时间戳估计出的坐标作为这帧数据的原点
     accumulated_range_data_.origin = range_data_poses.back().translation();
     return AddAccumulatedRangeData(
         time,
