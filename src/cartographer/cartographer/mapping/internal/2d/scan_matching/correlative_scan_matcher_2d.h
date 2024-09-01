@@ -87,6 +87,7 @@ struct Candidate2D {
   int scan_index = 0;
 
   // Linear offset from the initial pose.
+  // 像素坐标
   int x_index_offset = 0;
   int y_index_offset = 0;
 

@@ -58,17 +58,22 @@ float ComputeCandidateScore(const TSDF2D& tsdf,
   return candidate_score;
 }
 
+// 计算点云在指定像素坐标位置下的与ProbabilityGrid地图匹配的得分
 float ComputeCandidateScore(const ProbabilityGrid& probability_grid,
                             const DiscreteScan2D& discrete_scan,
                             int x_index_offset, int y_index_offset) {
   float candidate_score = 0.f;
   for (const Eigen::Array2i& xy_index : discrete_scan) {
+    // 对每个点都加上像素坐标的offset，相当于对点云进行平移
     const Eigen::Array2i proposed_xy_index(xy_index.x() + x_index_offset,
                                            xy_index.y() + y_index_offset);
+    // 获取概率
     const float probability =
         probability_grid.GetProbability(proposed_xy_index);
+    // 以概率为得分
     candidate_score += probability;
   }
+  // 计算平均得分
   candidate_score /= static_cast<float>(discrete_scan.size());
   CHECK_GT(candidate_score, 0.f);
   return candidate_score;
@@ -80,10 +85,12 @@ RealTimeCorrelativeScanMatcher2D::RealTimeCorrelativeScanMatcher2D(
     const proto::RealTimeCorrelativeScanMatcherOptions& options)
     : options_(options) {}
 
+// 生成所有的候选解
 std::vector<Candidate2D>
 RealTimeCorrelativeScanMatcher2D::GenerateExhaustiveSearchCandidates(
     const SearchParameters& search_parameters) const {
   int num_candidates = 0;
+  // 计算候选解的个数
   for (int scan_index = 0; scan_index != search_parameters.num_scans;
        ++scan_index) {
     const int num_linear_x_candidates =
@@ -96,6 +103,7 @@ RealTimeCorrelativeScanMatcher2D::GenerateExhaustiveSearchCandidates(
   }
   std::vector<Candidate2D> candidates;
   candidates.reserve(num_candidates);
+  // 生成候选解，候选解是有像素坐标的偏差组成的
   for (int scan_index = 0; scan_index != search_parameters.num_scans;
        ++scan_index) {
     for (int x_index_offset = search_parameters.linear_bounds[scan_index].min_x;
@@ -151,11 +159,13 @@ double RealTimeCorrelativeScanMatcher2D::Match(
   // step4： 生成所有的候选解
   std::vector<Candidate2D> candidates =GenerateExhaustiveSearchCandidates(search_parameters);
 
-  // 计算所有候选解的加权得分
+  //step5: 计算所有候选解的加权得分
   ScoreCandidates(grid, discrete_scans, search_parameters, &candidates);
 
+  //step6: 获取最优解
   const Candidate2D& best_candidate =
       *std::max_element(candidates.begin(), candidates.end());
+  //step7: 将计算出的偏差量加上原始位姿获得矫正后的位姿
   *pose_estimate = transform::Rigid2d(
       {initial_pose_estimate.translation().x() + best_candidate.x,
        initial_pose_estimate.translation().y() + best_candidate.y},
@@ -170,10 +180,9 @@ void RealTimeCorrelativeScanMatcher2D::ScoreCandidates(
   for (Candidate2D& candidate : *candidates) {
     switch (grid.GetGridType()) {
       case GridType::PROBABILITY_GRID:
-        candidate.score = ComputeCandidateScore(
-            static_cast<const ProbabilityGrid&>(grid),
-            discrete_scans[candidate.scan_index], candidate.x_index_offset,
-            candidate.y_index_offset);
+        candidate.score = ComputeCandidateScore(static_cast<const ProbabilityGrid&>(grid),
+                                                discrete_scans[candidate.scan_index], candidate.x_index_offset,
+                                                candidate.y_index_offset);
         break;
       case GridType::TSDF:
         candidate.score = ComputeCandidateScore(
@@ -182,6 +191,7 @@ void RealTimeCorrelativeScanMatcher2D::ScoreCandidates(
             candidate.y_index_offset);
         break;
     }
+    // 对得分进行加权
     candidate.score *=
         std::exp(-common::Pow2(std::hypot(candidate.x, candidate.y) *
                                    options_.translation_delta_cost_weight() +

@@ -206,6 +206,7 @@ LocalTrajectoryBuilder2D::AddRangeData(
     return AddAccumulatedRangeData(
         time,
         TransformToGravityAlignedFrameAndFilter(
+          // 将点云的变换到原点处 且位姿为0
             gravity_alignment.cast<float>() * range_data_poses.back().inverse(),
             accumulated_range_data_),
         gravity_alignment, sensor_duration);
